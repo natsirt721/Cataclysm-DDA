@@ -2218,13 +2218,6 @@ bool Character::block_hit( Creature *source, bodypart_id &bp_hit, damage_instanc
     // Do we block with a weapon? Handle melee wear but leave bp the same
     if( !( unarmed || force_unarmed || worn_shield ) && allow_weapon_blocking ) {
         thing_blocked_with = shield.tname();
-        // TODO: Change this depending on damage blocked
-        float wear_modifier = 1.0f;
-        if( source != nullptr && source->is_hallucination() ) {
-            wear_modifier = 0.0f;
-        }
-
-        handle_melee_wear( shield, wear_modifier );
     } else if( !allow_weapon_blocking ) {
         // Can't block with weapons
         return false;
@@ -2263,6 +2256,8 @@ bool Character::block_hit( Creature *source, bodypart_id &bp_hit, damage_instanc
     add_msg_debug( debugmode::DF_MELEE, "Physical block multiplier %.1f", physical_block_multiplier );
     float total_damage = 0.0f;
     float damage_blocked = 0.0f;
+    // Damage that is blockable by the shield, if present
+    float shield_damage = 0.0f;
 
     for( damage_unit &elem : dam.damage_units ) {
         total_damage += elem.amount;
@@ -2283,6 +2278,7 @@ bool Character::block_hit( Creature *source, bodypart_id &bp_hit, damage_instanc
             float previous_amount = elem.amount;
             elem.amount *= physical_block_multiplier;
             damage_blocked += previous_amount - elem.amount;
+            shield_damage += elem.amount;
         }
 
         // non-electrical "elemental" damage types do their full damage if unarmed,
@@ -2305,6 +2301,15 @@ bool Character::block_hit( Creature *source, bodypart_id &bp_hit, damage_instanc
                 damage_blocked += previous_amount - elem.amount;
             }
         }
+    }
+
+    if ( has_shield && !worn_shield && !( source != nullptr && source->is_hallucination() )) {
+        // if the source is not a hallucination and we're blocking with an item, apply wear to the blocking item
+        // the amount of damage blocked for which the wear modifier is 1.0
+        const float normal_wear_damage_value = 12.0;
+        float wear_modifier = std::clamp( shield_damage / normal_wear_damage_value, 0.1f, 2.0f );
+
+        handle_melee_wear( shield, wear_modifier );
     }
 
     std::string damage_blocked_description;
